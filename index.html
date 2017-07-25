@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title></title>
+    <style>
+        body {
+            margin: 0 auto;
+            padding: 0; padding-top: 1rem;
+            max-width: 54rem;
+            color: #333;
+            font-family: 'Yu Gothic', 'Meiryo', sans-serif;
+            background: white;
+        }
+        h1 {
+            margin: 0; padding: 0;
+            color: #111;
+            font-size: 2.4rem;
+            line-height: 3rem;
+        }
+        h2 {
+            margin: 0; padding: 0;
+            color: #333;
+            font-size: 1.6rem;
+            line-height: 2rem;
+        }
+        p {
+            margin: 0; padding: 0;
+            font-size: 1rem;
+            line-height: 1rem;
+        }
+        hr {
+            margin: 1rem 0; padding: 0;
+            border: none; border-top: solid 1px #666;
+            box-sizing: border-box;
+        }
+
+        #seqedit, #seqedit tr {
+            margin: 0; padding: 0;
+            border: none;
+        }
+        #seqedit th {
+            margin: 0; padding: 0;
+            font-weight: normal;
+            text-align: left;
+            line-height: 1rem;
+            height: 1rem;
+        }
+        #seqedit td {
+            margin: 0; padding: 0;
+            width: 45px; height: 45px;
+            text-align: center;
+            background: #eaeeef;
+            box-sizing: border-box;
+        }
+        #seqedit tr td:nth-child(4n-2) {
+            background: #dce4e8;
+        }
+        #seqedit tr td:hover {
+            background: #f9d18b !important;
+        }
+        .seqedit-button-checked {
+            border: solid 5px #5f7ead;
+        }
+        #seqedit tr td.seqedit-button-playing {
+            background: #d1ffa3;
+        }
+        .seqedit-button-checked.seqedit-button-playing {
+            border: solid 11px #83cc4f;
+        }
+    </style>
+</head>
+<body>
+    <h1>Biyo Biyo Boy</h1>
+    <hr>
+    <p>A web synthesizer of the <i>biyobiyo</i>, by the <i>biyobiyo</i>, for the <i>biyobiyo</i>.</p>
+    <hr>
+    <table id="seqedit"></table>
+    <hr>
+    <p>&copy; 2017 mogesystem</p>
+
+    <script src="./BufferLoader.js"></script>
+    <script src="./EnvelopeGenerator.js"></script>
+    <script>
+        var context;
+
+        window.onload = function() {
+            // タッチデバイスでのスクロールを無効化
+            //document.body.addEventListener('touchmove', function(event) {
+            //    event.preventDefault();
+            //}, false);
+
+            // オーディオを初期化
+            try {
+                window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                context = new AudioContext();
+            }
+            catch (e) {
+                alert('Web Audio API is not supported in this browser');
+                return;
+            }
+
+            Sequencer.init();
+        };
+
+        var Sequencer = {
+            init: function() {
+                Sequencer.sampler.init();
+            },
+            sampler: {
+                buffers: {},
+                resources: {
+                    kick: './01_kick.wav',
+                    snare: './808_sd.wav',
+                    clap: './808_cl.wav',
+                    hihat_close: './808_hc.wav',
+                    hihat_open: './808_ho.wav',
+                    perc1: './cr78_perc1.wav',
+                    perc2: './cr78_perc2.wav',
+                },
+                init: function() {
+                    // オーディオリソースを読み込む
+                    (new BufferLoader(
+                        context,
+                        Sequencer.sampler.resources,
+                        Sequencer.sampler.loadBuffers)).load();
+                },
+                loadBuffers: function(buffers) {
+                    Sequencer.sampler.buffers = buffers;
+                    Sequencer.afterInitSampler();
+                },
+                play: function(name, time) {
+                    if (!Sequencer.sampler.buffers.hasOwnProperty(name)) { return; }
+                    var buf = context.createBufferSource();
+                    buf.buffer = Sequencer.sampler.buffers[name];
+                    buf.connect(Sequencer.master.node);
+                    buf.start(time);
+                },
+            },
+            afterInitSampler: function () {
+                Sequencer.master.init();
+                Sequencer.vca.init();
+                Sequencer.vcf.init();
+                Sequencer.vco.init();
+                Sequencer.editor.create();
+
+                Sequencer.startLoop();
+            },
+            master: {
+                node: null,
+                init: function() {
+                    Sequencer.master.node = context.createGain();
+                    Sequencer.master.node.connect(context.destination);
+                    Sequencer.master.node.gain.value = 0.5;
+                },
+            },
+            vca: {
+                node: null,
+                eg: null,
+                gain: 1,
+                init: function() {
+                    Sequencer.vca.node = context.createGain();
+                    Sequencer.vca.node.connect(Sequencer.master.node);
+                    Sequencer.vca.eg = new EnvelopeGenerator();
+                    Sequencer.vca.eg.connect(Sequencer.vca.node.gain);
+                    Sequencer.vca.setAttack(0.01, 1);
+                    Sequencer.vca.setDecay(1);
+                    Sequencer.vca.setSustain(0.5);
+                    Sequencer.vca.setRelease(0.6);
+                    Sequencer.vca.node.gain.setValueAtTime(0, context.currentTime);
+                },
+                setAttack: function(time, gain) {
+                    Sequencer.vca.eg.attackTime = time;
+                    Sequencer.vca.eg.attackValue = gain * Sequencer.vca.gain;
+                },
+                setDecay: function(time) {
+                    Sequencer.vca.eg.decayTime = time;
+                },
+                setSustain: function(gain) {
+                    Sequencer.vca.eg.sustainValue = gain * Sequencer.vca.gain;
+                },
+                setRelease: function(time) {
+                    Sequencer.vca.eg.releaseTime = time;
+                },
+            },
+            vcf: {
+                node: null,
+                eg: null,
+                freq: 100,
+                freqmax: 20000,
+                init: function() {
+                    Sequencer.vcf.node = context.createBiquadFilter();
+                    Sequencer.vcf.node.type = 'lowpass';
+                    Sequencer.vcf.node.connect(Sequencer.vca.node);
+                    Sequencer.vcf.eg = new EnvelopeGenerator();
+                    Sequencer.vcf.eg.connect(Sequencer.vcf.node.frequency);
+                    Sequencer.vcf.setAttack(0.01, 1);
+                    Sequencer.vcf.setDecay(0.09);
+                    Sequencer.vcf.setSustain(0.005);
+                    Sequencer.vcf.setRelease(0.8);
+                    Sequencer.vcf.setFrequency(100);
+                    Sequencer.vcf.setQ(5);
+                },
+                setAttack: function(time, freq) {
+                    Sequencer.vcf.eg.attackTime = time;
+                    Sequencer.vcf.eg.attackValue = freq * Sequencer.vcf.freqmax;
+                },
+                setDecay: function(time) {
+                    Sequencer.vcf.eg.decayTime = time;
+                },
+                setSustain: function(freq) {
+                    Sequencer.vcf.eg.sustainValue = freq * Sequencer.vcf.freqmax;
+                },
+                setRelease: function(time) {
+                    Sequencer.vcf.eg.releaseTime = time;
+                },
+                setFrequency: function(freq) {
+                    Sequencer.vcf.freq = freq;
+                    Sequencer.vcf.eg.sustainValue = freq;
+                    Sequencer.vcf.node.frequency.setValueAtTime(freq, context.currentTime);
+                },
+                setQ: function(freq) {
+                    Sequencer.vcf.node.Q.setValueAtTime(freq, context.currentTime);
+                },
+            },
+            vco: {
+                oscNode: [],
+                ampNode: [],
+                freq: 55,
+                detune: 0.7,
+                numOsc: 2,
+                type: [ 'sawtooth', 'square' ],
+                amp: [0.5, 0.1],
+                init: function() {
+                    for (var i = 0; i < Sequencer.vco.numOsc; i++) {
+                        Sequencer.vco.oscNode[i] = context.createOscillator();
+                        Sequencer.vco.oscNode[i].type = Sequencer.vco.type[i];
+                        Sequencer.vco.ampNode[i] = context.createGain();
+                        Sequencer.vco.ampNode[i].gain.value = Sequencer.vco.amp[i];
+                        Sequencer.vco.ampNode[i].connect(Sequencer.vcf.node);
+                        Sequencer.vco.oscNode[i].connect(Sequencer.vco.ampNode[i]);
+                        Sequencer.vco.oscNode[i].start(0);
+                    }
+                },
+                setFrequency: function(freq) {
+                    Sequencer.vco.freq = freq;
+                    for (var i = 0; i < Sequencer.vco.numOsc; i++) {
+                        Sequencer.vco.oscNode[i].frequency.value = freq + i * Sequencer.vco.detune;
+                    }
+                },
+                setDetune: function (detune) {
+                    Sequencer.vco.detune = detune;
+                    Sequencer.vco.setFrequency(Sequencer.vco.freq);
+                },
+            },
+            note: {
+                trigger: function(time, duration) {
+                    Sequencer.vco.setFrequency(55);
+                    Sequencer.vca.eg.trigger(time, duration);
+                    Sequencer.vcf.eg.trigger(time, duration);
+                },
+            },
+            editor: {
+                buttons: {},
+                create: function() {
+                    var addButtons = function(parent, name, isSample) {
+                        var list = document.createElement('tr');
+                        var text = document.createElement('th');
+                        text.appendChild(document.createTextNode(name));
+                        list.appendChild(text);
+                        var buttons = [];
+                        for (var i = 0; i < Sequencer.numSteps; i++) {
+                            buttons[i] = document.createElement('td');
+                            buttons[i].addEventListener('click', Sequencer.editor.buttonClicked, false);
+                            buttons[i].buttonSample = name;
+                            buttons[i].buttonIndex = i;
+                            buttons[i].checked = false;
+                            buttons[i].isSample = isSample;
+                            list.appendChild(buttons[i]);
+                        }
+                        parent.appendChild(list);
+                        return buttons;
+                    };
+                    var elem = document.getElementById('seqedit');
+                    for (var name in Sequencer.sampler.buffers) {
+                        Sequencer.editor.buttons[name] = addButtons(elem, name, true);
+                    }
+                    Sequencer.editor.buttons['biyo'] = addButtons(elem, 'biyo', false);
+                },
+                buttonClicked: function(e) {
+                    var button = e.target;
+                    var name  = button.buttonSample;
+                    var index = button.buttonIndex;
+                    var className = 'seqedit-button-checked';
+                    if (!button.checked) {
+                        button.classList.add(className);
+                    }
+                    else {
+                        button.classList.remove(className);
+                    }
+                    button.checked = !button.checked;
+                },
+                seekPlaying: function(index) {
+                    var setPlaying = function(condition, target) {
+                        var className = 'seqedit-button-playing';
+                        if (condition == true) {
+                            target.classList.add(className);
+                        }
+                        else {
+                            target.classList.remove(className);
+                        }
+                    };
+                    for (var i = 0; i < Sequencer.numSteps; i++) {
+                        for (var name in Sequencer.editor.buttons) {
+                            var buttons = Sequencer.editor.buttons[name];
+                            setPlaying(i == index, buttons[i]);
+                        }
+                    }
+                },
+            },
+            tempo: 120.0,
+            looping: false,
+            numSteps: 16,
+            currentStep: 0,
+            playStep: function(step, duration) {
+                for (var name in Sequencer.editor.buttons) {
+                    var btn = Sequencer.editor.buttons[name][step];
+                    if (btn.checked) {
+                        if (btn.isSample) {
+                            Sequencer.sampler.play(name, 0);
+                        }
+                        else {
+                            Sequencer.note.trigger(context.currentTime, duration);
+                        }
+                    }
+                }
+            },
+            incrementStep: function() {
+                Sequencer.editor.seekPlaying(Sequencer.currentStep);
+                Sequencer.currentStep++;
+                if (Sequencer.currentStep >= Sequencer.numSteps) {
+                    Sequencer.currentStep = 0;
+                }
+            },
+            startLoop: function() {
+                if (Sequencer.looping) { return; }
+                Sequencer.looping = true;
+
+                var stepDuration = 60 * 4 / Sequencer.tempo / Sequencer.numSteps;
+                setInterval(function() {
+                    Sequencer.playStep(Sequencer.currentStep, stepDuration);
+                    Sequencer.incrementStep();
+                }, stepDuration * 1000);
+            },
+            stopLoop: function() {
+                Sequencer.looping = false;
+            }
+        };
+    </script>
+</body>
+</html>
