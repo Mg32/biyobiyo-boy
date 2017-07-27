@@ -109,6 +109,15 @@
             },
             sampler: {
                 buffers: {},
+                bufferNames: [
+                    'hihat_close',
+                    'hihat_open',
+                    'perc1',
+                    'perc2',
+                    'snare',
+                    'clap',
+                    'kick',
+                ],
                 resources: {
                     kick: './01_kick.wav',
                     snare: './808_sd.wav',
@@ -282,7 +291,8 @@
                         return buttons;
                     };
                     var elem = document.getElementById('seqedit');
-                    for (var name in Sequencer.sampler.buffers) {
+                    for (var i in Sequencer.sampler.bufferNames) {
+                        var name = Sequencer.sampler.bufferNames[i];
                         Sequencer.editor.buttons[name] = addButtons(elem, name, true);
                     }
                     Sequencer.editor.buttons['biyo'] = addButtons(elem, 'biyo', false);
