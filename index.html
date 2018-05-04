@@ -50,6 +50,12 @@
             margin: 0; padding: 0;
             width: 45px; height: 45px;
             text-align: center;
+            line-height: 0;
+            cursor: ns-resize;
+            user-select: none;
+            -moz-user-select: none;
+            -webkit-user-select: none;
+            -ms-user-select: none;
             background: #eaeeef;
             box-sizing: border-box;
         }
@@ -67,6 +73,9 @@
         }
         .seqedit-button-checked.seqedit-button-playing {
             border: solid 11px #83cc4f;
+        }
+        .seqedit-button-editing {
+            border: solid 11px #e8ac45;
         }
     </style>
 </head>
@@ -280,11 +289,14 @@
                         var buttons = [];
                         for (var i = 0; i < Sequencer.numSteps; i++) {
                             buttons[i] = document.createElement('td');
-                            buttons[i].addEventListener('click', Sequencer.editor.buttonClicked, false);
+                            buttons[i].addEventListener('mousedown', Sequencer.editor.buttonMouseDown, false);
+                            buttons[i].addEventListener('mouseup', Sequencer.editor.buttonMouseUp, false);
+                            buttons[i].addEventListener('mousemove', Sequencer.editor.buttonMouseMove, false);
                             buttons[i].buttonSample = name;
                             buttons[i].buttonIndex = i;
                             buttons[i].checked = false;
                             buttons[i].isSample = isSample;
+                            buttons[i].textContent = '1';
                             list.appendChild(buttons[i]);
                         }
                         parent.appendChild(list);
@@ -297,18 +309,42 @@
                     }
                     Sequencer.editor.buttons['biyo'] = addButtons(elem, 'biyo', false);
                 },
-                buttonClicked: function(e) {
-                    var button = e.target;
-                    var name  = button.buttonSample;
-                    var index = button.buttonIndex;
+                currentButton: {
+                    element: null,
+                    mouseDown: false,
+                    mouseMove: false,
+                },
+                buttonMouseDown: function(e) {
+                    context.resume();
+                    Sequencer.editor.currentButton.element = e.target;
+                    Sequencer.editor.currentButton.mouseDown = true;
+                    Sequencer.editor.currentButton.mouseMove = false;
+                },
+                buttonMouseUp: function(e) {
+                    var button = Sequencer.editor.currentButton.element;
                     var className = 'seqedit-button-checked';
-                    if (!button.checked) {
+                    if (!Sequencer.editor.currentButton.mouseMove) {
+                        button.checked = !button.checked;
+                    }
+                    if (button.checked) {
                         button.classList.add(className);
                     }
                     else {
                         button.classList.remove(className);
                     }
-                    button.checked = !button.checked;
+                    button.classList.remove('seqedit-button-editing');
+                    Sequencer.editor.currentButton.element = null;
+                    Sequencer.editor.currentButton.mouseDown = false;
+                    Sequencer.editor.currentButton.mouseMove = false;
+                },
+                buttonMouseMove: function(e) {
+                    if (!Sequencer.editor.currentButton.mouseDown) { return; }
+                    var button = Sequencer.editor.currentButton.element;
+                    var className = 'seqedit-button-editing';
+                    if (!button.classList.contains(className)) {
+                        button.classList.add(className);
+                    }
+                    Sequencer.editor.currentButton.mouseMove = true;
                 },
                 seekPlaying: function(index) {
                     var setPlaying = function(condition, target) {

@@ -5,7 +5,7 @@ function EnvelopeGenerator() {
     this.decayTime    = 2;
     this.sustainValue = 0.2;
     this.releaseTime  = 0.1;
-};
+}
 EnvelopeGenerator.prototype.trigger = function(time, duration) {
     var start = time;
     this.param.cancelScheduledValues(start);
